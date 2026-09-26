@@ -1,9 +1,9 @@
 import { computed, reactive, ref } from 'vue';
 import { defineStore } from 'pinia';
 import type {
-  AuditRecord, DictionaryEntry, DictionarySnapshot, DuplicatePair, EntryStatus, ReviewComment, VersionRecord
+  AuditRecord, DictionaryEntry, DictionarySnapshot, DuplicatePair, EntryStatus, MergeFieldDecision, MergeStrategy, ReviewComment, VersionRecord
 } from '~/types/dictionary';
-import { findDuplicates } from '~/utils/dictionary';
+import { fieldLabels, findDuplicates, mergeStrategyLabels } from '~/utils/dictionary';
 
 const now = () => new Date().toISOString();
 const uid = (prefix: string) => `${prefix}-${Math.random().toString(36).slice(2, 9)}-${Date.now().toString(36)}`;
@@ -245,11 +245,34 @@ export const useDictionaryStore = defineStore('dictionary', () => {
     });
   }
 
-  function mergeEntries(targetId: string, sourceIds: string[], selected: Record<string, 'target' | 'source' | 'combine'>) {
+  function mergeEntries(targetId: string, sourceIds: string[], selected: Record<string, MergeStrategy>) {
     const target = entries.find((entry) => entry.id === targetId);
     const sources = entries.filter((entry) => sourceIds.includes(entry.id));
     if (!target || !sources.length) return;
-    commit('合并重复词条', `将 ${sources.length} 个重复词条合并到“${target.headword}”`, [targetId, ...sourceIds], () => {
+    const primary = sources[0]!;
+    const scalarFields = ['headword', 'pronunciation', 'partOfSpeech', 'definition', 'notes'] as const;
+    const fieldDecisions: MergeFieldDecision[] = scalarFields.map((field) => {
+      const strategy: MergeStrategy = selected[field] ?? 'target';
+      const targetValue = target[field];
+      const sourceValue = primary[field];
+      let result = targetValue;
+      if (strategy === 'source') result = sourceValue;
+      if (strategy === 'combine') {
+        if (!sourceValue || targetValue === sourceValue) result = targetValue;
+        else if (!targetValue) result = sourceValue;
+        else result = `${targetValue}；${sourceValue}`;
+      }
+      return { field, strategy, targetValue, sourceValue, result };
+    });
+    const decisionSummary = fieldDecisions.map((decision) => `${fieldLabels[decision.field] ?? decision.field}用${mergeStrategyLabels[decision.strategy]}`).join('，');
+    commit('合并重复词条', `将 ${sources.length} 个重复词条合并到“${target.headword}”：${decisionSummary}`, [targetId, ...sourceIds], () => {
+      const stampOrigin = (entry: DictionaryEntry) => {
+        entry.reviewerComments.forEach((comment) => {
+          comment.origin ??= { entryId: entry.id, headword: entry.headword, field: comment.field };
+        });
+      };
+      stampOrigin(target);
+      sources.forEach(stampOrigin);
       sources.forEach((source) => {
         const layers: Array<keyof DictionaryEntry> = ['dialectVariants', 'examples', 'sources', 'synonyms', 'reviewerComments'];
         layers.forEach((field) => {
@@ -258,12 +281,15 @@ export const useDictionaryStore = defineStore('dictionary', () => {
           targetValue.push(...clone(sourceValue));
         });
       });
-      (['headword', 'pronunciation', 'partOfSpeech', 'definition', 'notes'] as const).forEach((field) => {
-        const choice = selected[field] ?? 'target';
-        if (choice === 'source') target[field] = sources[0]![field];
-        if (choice === 'combine' && target[field] !== sources[0]![field]) target[field] = `${target[field]}；${sources[0]![field]}`;
-      });
+      fieldDecisions.forEach((decision) => { target[decision.field as typeof scalarFields[number]] = decision.result; });
       target.status = 'disputed';
+      target.mergeHistory = [{
+        id: uid('merge'),
+        at: now(),
+        sourceIds: sources.map((source) => source.id),
+        sourceHeadwords: sources.map((source) => source.headword),
+        fieldDecisions
+      }, ...(target.mergeHistory ?? [])];
       sourceIds.forEach((id) => {
         const index = entries.findIndex((entry) => entry.id === id);
         if (index >= 0) entries.splice(index, 1);

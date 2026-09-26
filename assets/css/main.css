@@ -144,6 +144,31 @@ kbd { padding: 3px 6px; border: 1px solid #cbd6d1; border-bottom-width: 2px; bor
 .merge-layers span { margin: 4px 0 2px; color: var(--forest); font-size: 15px; font-family: "Songti SC", serif; }
 .merge-layers small { color: var(--muted); font-size: 8px; }
 .merge-warning { display: flex; flex-direction: column; gap: 3px; margin-top: 11px; padding: 10px; color: #77552d; border-radius: 7px; background: #fbf0de; font-size: 9px; }
+.comment-audit { margin-top: 11px; padding: 10px; border: 1px dashed #d8c9a8; border-radius: 8px; background: #fbf7ec; }
+.comment-audit-title { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.comment-audit-title strong { font-size: 10px; }
+.comment-audit-title span { color: #8a7a55; font-size: 8px; }
+.comment-audit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.comment-audit-side { display: flex; flex-direction: column; gap: 3px; padding: 8px; border-radius: 7px; background: white; }
+.comment-audit-side strong { font-size: 10px; }
+.comment-audit-side span { color: #a26931; font-size: 12px; font-weight: 700; }
+.comment-audit-side span.none { color: #688078; font-size: 10px; }
+.comment-audit-side small { color: var(--muted); font-size: 8px; line-height: 1.5; }
+.comment-origin { margin-top: 6px; padding: 4px 7px; border-radius: 5px; background: #f3ecd9; color: #8a6d3b; font-size: 8px; }
+.merge-history { max-height: 168px; overflow-y: auto; margin: 0 11px 8px; padding: 9px; border: 1px solid #e2d8c3; border-radius: 8px; background: #fbf8f0; }
+.merge-history-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.merge-history-head strong { font-size: 10px; }
+.merge-history-head span { color: #93835f; font-size: 8px; }
+.merge-record { margin-top: 7px; padding-top: 7px; border-top: 1px dashed #e0d5bd; }
+.merge-record:first-of-type { margin-top: 7px; }
+.merge-record header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; color: #8a7a55; font-size: 8px; }
+.merge-record ul { margin: 6px 0 0; padding: 0; list-style: none; }
+.merge-record li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px 6px; padding: 2px 0; font-size: 9px; }
+.decision-field { flex: 0 0 auto; font-weight: 700; }
+.decision-strategy { flex: 0 0 auto; padding: 1px 7px; border-radius: 8px; background: #e8efe9; color: #2e5d4d; font-size: 8px; font-style: normal; font-weight: 700; }
+.decision-strategy[data-strategy="source"] { background: #fdeedd; color: #8a5a1d; }
+.decision-strategy[data-strategy="combine"] { background: #e5ecf7; color: #33527a; }
+.merge-record li small { color: var(--muted); font-size: 8px; word-break: break-all; }
 .dialog-actions { justify-content: flex-end; gap: 7px; margin-top: 15px; }
 .delete-check { display: flex; flex-direction: column; gap: 11px; }
 .delete-target { align-items: flex-start; flex-direction: column; gap: 3px; padding: 11px; border-radius: 8px; background: #f5f7f5; }

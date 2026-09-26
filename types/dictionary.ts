@@ -30,6 +30,29 @@ export interface ReviewComment {
   status: 'open' | 'resolved';
   createdAt: string;
   replies: Array<{ id: string; author: string; message: string; createdAt: string }>;
+  origin?: {
+    entryId: string;
+    headword: string;
+    field: string;
+  };
+}
+
+export type MergeStrategy = 'target' | 'source' | 'combine';
+
+export interface MergeFieldDecision {
+  field: string;
+  strategy: MergeStrategy;
+  targetValue: string;
+  sourceValue: string;
+  result: string;
+}
+
+export interface MergeRecord {
+  id: string;
+  at: string;
+  sourceIds: string[];
+  sourceHeadwords: string[];
+  fieldDecisions: MergeFieldDecision[];
 }
 
 export interface DictionaryEntry {
@@ -47,6 +70,7 @@ export interface DictionaryEntry {
   createdAt: string;
   updatedAt: string;
   reviewerComments: ReviewComment[];
+  mergeHistory?: MergeRecord[];
 }
 
 export interface VersionRecord {

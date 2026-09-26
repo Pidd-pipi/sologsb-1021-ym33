@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { useDictionaryStore } from '~/store/dictionary';
+import { fieldLabels, mergeStrategyLabels } from '~/utils/dictionary';
 
 const store = useDictionaryStore();
 const emit = defineEmits<{ versions: [] }>();
@@ -9,9 +10,6 @@ const commentText = ref('');
 const filter = ref<'all' | 'open' | 'resolved'>('all');
 const entry = computed(() => store.selectedEntry);
 const comments = computed(() => (entry.value?.reviewerComments ?? []).filter((comment) => filter.value === 'all' || comment.status === filter.value));
-const fieldLabels: Record<string, string> = {
-  headword: '词形', pronunciation: '发音', partOfSpeech: '词性', definition: '释义', dialectVariants: '方言变体', examples: '例句', sources: '来源', synonyms: '同义词', notes: '备注'
-};
 
 const addComment = () => {
   if (!entry.value || !commentText.value.trim()) return;
@@ -36,9 +34,23 @@ const addComment = () => {
       <button :class="{ active: filter === 'open' }" @click="filter = 'open'">待回复</button>
       <button :class="{ active: filter === 'resolved' }" @click="filter = 'resolved'">已解决</button>
     </div>
+    <div v-if="entry.mergeHistory?.length" class="merge-history">
+      <div class="merge-history-head"><strong>合并记录</strong><span>{{ entry.mergeHistory.length }} 次合并 · 字段取舍与意见来源</span></div>
+      <article v-for="record in entry.mergeHistory" :key="record.id" class="merge-record">
+        <header><time>{{ new Date(record.at).toLocaleString('zh-CN') }}</time><span>并入：{{ record.sourceHeadwords.join('、') }}</span></header>
+        <ul>
+          <li v-for="decision in record.fieldDecisions" :key="decision.field">
+            <span class="decision-field">{{ fieldLabels[decision.field] || decision.field }}</span>
+            <em class="decision-strategy" :data-strategy="decision.strategy">{{ mergeStrategyLabels[decision.strategy] }}</em>
+            <small v-if="decision.strategy !== 'target'">主条「{{ decision.targetValue || '空' }}」/ 另一条「{{ decision.sourceValue || '空' }}」→「{{ decision.result || '空' }}」</small>
+          </li>
+        </ul>
+      </article>
+    </div>
     <div class="comment-list">
       <article v-for="comment in comments" :key="comment.id" class="comment-card" :class="{ resolved: comment.status === 'resolved' }">
         <header><t-tag size="small" variant="light" :theme="comment.status === 'open' ? 'warning' : 'success'">{{ fieldLabels[comment.field] || comment.field }}</t-tag><span>{{ comment.author }}</span><time>{{ new Date(comment.createdAt).toLocaleDateString('zh-CN') }}</time></header>
+        <div v-if="comment.origin" class="comment-origin">来自原词条《{{ comment.origin.headword }}》 · 原字段「{{ fieldLabels[comment.origin.field] || comment.origin.field }}」</div>
         <p>{{ comment.message }}</p>
         <div v-for="reply in comment.replies" :key="reply.id" class="reply"><strong>{{ reply.author }}</strong><span>{{ reply.message }}</span><time>{{ new Date(reply.createdAt).toLocaleString('zh-CN') }}</time></div>
         <div class="reply-box">

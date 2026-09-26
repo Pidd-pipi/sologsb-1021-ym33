@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue';
-import type { DuplicatePair, DictionaryEntry } from '~/types/dictionary';
+import type { DuplicatePair, DictionaryEntry, MergeStrategy } from '~/types/dictionary';
 import { useDictionaryStore } from '~/store/dictionary';
+import { fieldLabels } from '~/utils/dictionary';
 
 const visible = defineModel<boolean>({ required: true });
 const props = defineProps<{ pairs: DuplicatePair[] }>();
 const store = useDictionaryStore();
 const pairIndex = ref(0);
 const targetSide = ref<'left' | 'right'>('left');
-const choices = reactive<Record<string, 'target' | 'source' | 'combine'>>({
+const choices = reactive<Record<string, MergeStrategy>>({
   headword: 'target', pronunciation: 'target', partOfSpeech: 'target', definition: 'target', notes: 'target'
 });
 const fields = [
@@ -19,6 +20,14 @@ const left = computed<DictionaryEntry | undefined>(() => store.entries.find((ent
 const right = computed<DictionaryEntry | undefined>(() => store.entries.find((entry) => entry.id === currentPair.value?.rightId));
 const target = computed(() => targetSide.value === 'left' ? left.value : right.value);
 const source = computed(() => targetSide.value === 'left' ? right.value : left.value);
+
+const openCommentSummary = (entry: DictionaryEntry | undefined) => {
+  const open = (entry?.reviewerComments ?? []).filter((comment) => comment.status === 'open');
+  return { count: open.length, fields: [...new Set(open.map((comment) => comment.field))] };
+};
+const leftSummary = computed(() => openCommentSummary(left.value));
+const rightSummary = computed(() => openCommentSummary(right.value));
+const totalOpenComments = computed(() => leftSummary.value.count + rightSummary.value.count);
 
 watch(visible, (open) => {
   if (!open) return;
@@ -62,15 +71,31 @@ const confirmMerge = () => {
         </div>
       </div>
 
+      <div class="comment-audit">
+        <div class="comment-audit-title"><strong>合并前审校意见盘点</strong><span>确认后再合并；每条意见都会保留原词条与原字段</span></div>
+        <div class="comment-audit-grid">
+          <div class="comment-audit-side">
+            <strong>左侧 · {{ left.headword }}</strong>
+            <span :class="{ none: !leftSummary.count }">{{ leftSummary.count ? `${leftSummary.count} 条未解决意见` : '无未解决意见' }}</span>
+            <small v-if="leftSummary.fields.length">涉及字段：{{ leftSummary.fields.map((field) => fieldLabels[field] || field).join('、') }}</small>
+          </div>
+          <div class="comment-audit-side">
+            <strong>右侧 · {{ right.headword }}</strong>
+            <span :class="{ none: !rightSummary.count }">{{ rightSummary.count ? `${rightSummary.count} 条未解决意见` : '无未解决意见' }}</span>
+            <small v-if="rightSummary.fields.length">涉及字段：{{ rightSummary.fields.map((field) => fieldLabels[field] || field).join('、') }}</small>
+          </div>
+        </div>
+      </div>
+
       <div class="merge-layers">
         <div><strong>方言变体</strong><span>{{ left.dialectVariants.length }} + {{ right.dialectVariants.length }}</span><small>合并时全部保留</small></div>
         <div><strong>例句</strong><span>{{ left.examples.length }} + {{ right.examples.length }}</span><small>合并时全部保留</small></div>
         <div><strong>来源</strong><span>{{ left.sources.length }} + {{ right.sources.length }}</span><small>合并时全部保留</small></div>
-        <div><strong>审校意见</strong><span>{{ left.reviewerComments.length }} + {{ right.reviewerComments.length }}</span><small>合并时全部保留</small></div>
+        <div><strong>审校意见</strong><span>{{ left.reviewerComments.length }} + {{ right.reviewerComments.length }}</span><small>全部保留并标明原词条</small></div>
       </div>
 
       <div class="merge-warning"><strong>合并结果会标记为“争议”</strong><span>被合并词条不再单独显示，但完整快照和字段来源会进入版本记录，可撤销或恢复。</span></div>
-      <div class="dialog-actions"><t-button variant="outline" @click="visible = false">取消</t-button><t-button theme="primary" @click="confirmMerge">生成合并词条</t-button></div>
+      <div class="dialog-actions"><t-button variant="outline" @click="visible = false">取消</t-button><t-button theme="primary" @click="confirmMerge">生成合并词条（保留 {{ totalOpenComments }} 条未解决意见）</t-button></div>
     </div>
     <t-empty v-else description="没有可合并的重复词条" />
   </t-dialog>

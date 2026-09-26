@@ -1,4 +1,22 @@
-import type { DictionaryEntry, DuplicatePair } from '~/types/dictionary';
+import type { DictionaryEntry, DuplicatePair, MergeStrategy } from '~/types/dictionary';
+
+export const fieldLabels: Record<string, string> = {
+  headword: '词形',
+  pronunciation: '发音',
+  partOfSpeech: '词性',
+  definition: '释义',
+  dialectVariants: '方言变体',
+  examples: '例句',
+  sources: '来源',
+  synonyms: '同义词',
+  notes: '编者备注'
+};
+
+export const mergeStrategyLabels: Record<MergeStrategy, string> = {
+  target: '主条',
+  source: '另一条',
+  combine: '拼接'
+};
 
 export const normalizeWord = (value: string) => value
   .normalize('NFKC')
