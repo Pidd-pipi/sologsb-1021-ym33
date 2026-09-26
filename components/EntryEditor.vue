@@ -1,11 +1,21 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { useDictionaryStore } from '~/store/dictionary';
+import type { MergeRecord } from '~/types/dictionary';
 
 const store = useDictionaryStore();
 const activeTab = ref('basic');
 const entry = computed(() => store.selectedEntry);
 const synonymsText = computed(() => entry.value?.synonyms.join('、') ?? '');
+
+const mergeFields = ['headword', 'pronunciation', 'partOfSpeech', 'definition', 'notes'] as const;
+const mergeFieldLabels: Record<string, string> = { headword: '词形', pronunciation: '发音', partOfSpeech: '词性', definition: '释义', notes: '编者备注' };
+const decisionText = (record: MergeRecord, field: string) => {
+  const other = record.sources[0]?.headword ?? '另一条';
+  if (record.fieldDecisions[field] === 'source') return `另一条（${other}）`;
+  if (record.fieldDecisions[field] === 'combine') return `拼接（主条＋${other}）`;
+  return '主条';
+};
 
 const eventValue = (event: any) => typeof event === 'string' || typeof event === 'number' ? String(event) : event?.target?.value ?? event?.e?.target?.value ?? event?.value ?? '';
 
@@ -44,6 +54,16 @@ const commitInput = (event: any, field: 'headword' | 'pronunciation' | 'partOfSp
           </div>
           <label class="field-block"><span>释义</span><t-textarea :default-value="entry.definition" :autosize="{ minRows: 3, maxRows: 7 }" @blur="commitInput($event, 'definition')" placeholder="用简洁语言描述词义、语用限制和引申关系" /></label>
           <label class="field-block"><span>编者备注</span><t-textarea :default-value="entry.notes" :autosize="{ minRows: 2, maxRows: 5 }" @blur="commitInput($event, 'notes')" placeholder="记录不确定项、调查问题或整理说明" /></label>
+
+          <div v-if="entry.mergeHistory?.length" class="merge-history">
+            <div class="section-title"><div><h3>合并记录</h3><p>每次合并的字段取舍随词条保存；切到别的词条再回来仍可核对，版本快照可整体恢复。</p></div></div>
+            <article v-for="record in entry.mergeHistory" :key="record.id" class="merge-record">
+              <header><time>{{ new Date(record.at).toLocaleString('zh-CN') }}</time><span>「{{ record.sources.map((source) => source.headword).join('」、「') }}」并入「{{ record.targetHeadword }}」</span></header>
+              <div class="merge-decisions">
+                <span v-for="field in mergeFields" :key="field" class="decision-chip" :class="`choice-${record.fieldDecisions[field]}`">{{ mergeFieldLabels[field] }}：{{ decisionText(record, field) }}</span>
+              </div>
+            </article>
+          </div>
         </div>
       </t-tab-panel>
 

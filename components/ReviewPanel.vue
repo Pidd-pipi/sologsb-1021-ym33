@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { useDictionaryStore } from '~/store/dictionary';
+import type { ReviewComment } from '~/types/dictionary';
 
 const store = useDictionaryStore();
 const emit = defineEmits<{ versions: [] }>();
@@ -11,6 +12,14 @@ const entry = computed(() => store.selectedEntry);
 const comments = computed(() => (entry.value?.reviewerComments ?? []).filter((comment) => filter.value === 'all' || comment.status === filter.value));
 const fieldLabels: Record<string, string> = {
   headword: '词形', pronunciation: '发音', partOfSpeech: '词性', definition: '释义', dialectVariants: '方言变体', examples: '例句', sources: '来源', synonyms: '同义词', notes: '备注'
+};
+const isForeignOrigin = (comment: ReviewComment) => !!comment.origin && comment.origin.entryId !== entry.value?.id;
+const originText = (comment: ReviewComment) => {
+  if (!comment.origin) return '';
+  const field = fieldLabels[comment.origin.field] || comment.origin.field;
+  return isForeignOrigin(comment)
+    ? `合并自「${comment.origin.headword}」 · 原字段：${field}`
+    : `原属本词条 · 原字段：${field}`;
 };
 
 const addComment = () => {
@@ -39,6 +48,7 @@ const addComment = () => {
     <div class="comment-list">
       <article v-for="comment in comments" :key="comment.id" class="comment-card" :class="{ resolved: comment.status === 'resolved' }">
         <header><t-tag size="small" variant="light" :theme="comment.status === 'open' ? 'warning' : 'success'">{{ fieldLabels[comment.field] || comment.field }}</t-tag><span>{{ comment.author }}</span><time>{{ new Date(comment.createdAt).toLocaleDateString('zh-CN') }}</time></header>
+        <div v-if="comment.origin" class="comment-origin" :class="{ foreign: isForeignOrigin(comment) }">{{ originText(comment) }}</div>
         <p>{{ comment.message }}</p>
         <div v-for="reply in comment.replies" :key="reply.id" class="reply"><strong>{{ reply.author }}</strong><span>{{ reply.message }}</span><time>{{ new Date(reply.createdAt).toLocaleString('zh-CN') }}</time></div>
         <div class="reply-box">

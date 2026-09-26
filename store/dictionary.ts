@@ -1,7 +1,7 @@
 import { computed, reactive, ref } from 'vue';
 import { defineStore } from 'pinia';
 import type {
-  AuditRecord, DictionaryEntry, DictionarySnapshot, DuplicatePair, EntryStatus, ReviewComment, VersionRecord
+  AuditRecord, DictionaryEntry, DictionarySnapshot, DuplicatePair, EntryStatus, MergeFieldChoice, MergeRecord, ReviewComment, VersionRecord
 } from '~/types/dictionary';
 import { findDuplicates } from '~/utils/dictionary';
 
@@ -32,7 +32,7 @@ const seedEntries = (): DictionaryEntry[] => [
     examples: [{ id: 'ex-3', text: 'kho⁵⁵ dʑa⁵⁵ tɕhi³³.', translation: '谷子已经摊开晒了。', source: '田野记录 2023-09-12' }],
     sources: [{ id: 'src-3', title: '东南村生产词调查', citation: '王某某，2023，词条 071', url: '' }],
     synonyms: ['晒', '等待'], status: 'review', notes: '“等待”的引申义需由审校人确认。', createdAt: '2024-10-01T06:00:00.000Z', updatedAt: '2025-02-18T02:00:00.000Z',
-    reviewerComments: [{ id: 'c-1', field: 'definition', author: '主审·和老师', message: '“等待”是短语层面的临时义还是固定引申义？请补充一条例句。', status: 'open', createdAt: '2025-02-18T02:00:00.000Z', replies: [] }]
+    reviewerComments: [{ id: 'c-1', field: 'definition', author: '主审·和老师', message: '“等待”是短语层面的临时义还是固定引申义？请补充一条例句。', status: 'open', createdAt: '2025-02-18T02:00:00.000Z', replies: [], origin: { entryId: 'entry-002', headword: 'dʑa⁵⁵', field: 'definition' } }]
   },
   {
     id: 'entry-003', headword: 'dʑa³³', pronunciation: 'dʑa˧（中调）', partOfSpeech: '动词', definition: '摊晒谷物，使水分蒸发。', dialectVariants: [], examples: [{ id: 'ex-4', text: 'dʑa³³ ko⁵⁵ kho⁵⁵.', translation: '把粮食拿去晒。', source: '语音调查 M-12' }], sources: [{ id: 'src-4', title: '方言调查卡片', citation: '1992，卡片 M-12', url: '' }], synonyms: ['晒粮'], status: 'disputed', notes: '与 dʑa⁵⁵ 可能是同一词条的声调变体。', createdAt: '2024-12-01T06:00:00.000Z', updatedAt: '2025-02-20T03:00:00.000Z', reviewerComments: []
@@ -45,7 +45,7 @@ const seedEntries = (): DictionaryEntry[] => [
   },
   {
     id: 'entry-006', headword: 'tsha⁵⁵', pronunciation: 'tsha˥', partOfSpeech: '名词', definition: '水源；泉水涌出的地方。', dialectVariants: [], examples: [{ id: 'ex-7', text: 'tsha⁵⁵ ʔmɨ⁵⁵ ma³³.', translation: '泉眼在这个地方。', source: '地名调查 2022-07' }], sources: [{ id: 'src-7', title: '村落地名调查', citation: '录音 C-2022-07，00:22:08', url: '' }], synonyms: ['泉眼', '水潭'], status: 'review', notes: '', createdAt: '2025-02-01T02:00:00.000Z', updatedAt: '2025-02-25T02:00:00.000Z',
-    reviewerComments: [{ id: 'c-2', field: 'sources', author: '审校·罗老师', message: '请把录音中发言人姓名补到资料来源。', status: 'open', createdAt: '2025-02-25T02:00:00.000Z', replies: [{ id: 'r-1', author: '编辑·阿木', message: '已向调查员索取授权信息，暂以录音编号占位。', createdAt: '2025-02-26T01:00:00.000Z' }] }]
+    reviewerComments: [{ id: 'c-2', field: 'sources', author: '审校·罗老师', message: '请把录音中发言人姓名补到资料来源。', status: 'open', createdAt: '2025-02-25T02:00:00.000Z', replies: [{ id: 'r-1', author: '编辑·阿木', message: '已向调查员索取授权信息，暂以录音编号占位。', createdAt: '2025-02-26T01:00:00.000Z' }], origin: { entryId: 'entry-006', headword: 'tsha⁵⁵', field: 'sources' } }]
   }
 ];
 
@@ -215,7 +215,10 @@ export const useDictionaryStore = defineStore('dictionary', () => {
   function addComment(entryId: string, field: string, message: string, author = '主审·和老师') {
     const entry = entries.find((item) => item.id === entryId);
     if (!entry || !message.trim()) return;
-    const comment: ReviewComment = { id: uid('comment'), field, author, message: message.trim(), status: 'open', createdAt: now(), replies: [] };
+    const comment: ReviewComment = {
+      id: uid('comment'), field, author, message: message.trim(), status: 'open', createdAt: now(), replies: [],
+      origin: { entryId: entry.id, headword: entry.headword, field }
+    };
     commit('新增审校意见', `对“${field}”添加审校意见`, [entryId], () => entry.reviewerComments.unshift(comment));
   }
 
@@ -245,30 +248,57 @@ export const useDictionaryStore = defineStore('dictionary', () => {
     });
   }
 
-  function mergeEntries(targetId: string, sourceIds: string[], selected: Record<string, 'target' | 'source' | 'combine'>) {
+  const mergeFieldLabels: Record<string, string> = { headword: '词形', pronunciation: '发音', partOfSpeech: '词性', definition: '释义', notes: '编者备注' };
+  const mergeChoiceLabels: Record<MergeFieldChoice, string> = { target: '主条', source: '另一条', combine: '拼接' };
+
+  function mergeEntries(targetId: string, sourceIds: string[], selected: Record<string, MergeFieldChoice>) {
     const target = entries.find((entry) => entry.id === targetId);
     const sources = entries.filter((entry) => sourceIds.includes(entry.id));
     if (!target || !sources.length) return;
-    commit('合并重复词条', `将 ${sources.length} 个重复词条合并到“${target.headword}”`, [targetId, ...sourceIds], () => {
+    const scalarFields = ['headword', 'pronunciation', 'partOfSpeech', 'definition', 'notes'] as const;
+    const fieldDecisions: Record<string, MergeFieldChoice> = {};
+    scalarFields.forEach((field) => { fieldDecisions[field] = selected[field] ?? 'target'; });
+    const openCount = (entry: DictionaryEntry) => entry.reviewerComments.filter((comment) => comment.status === 'open').length;
+    const record: MergeRecord = {
+      id: uid('merge'),
+      at: now(),
+      targetHeadword: target.headword,
+      sources: sources.map((source) => ({ id: source.id, headword: source.headword })),
+      fieldDecisions
+    };
+    const decisionText = scalarFields.map((field) => `${mergeFieldLabels[field]}=${mergeChoiceLabels[fieldDecisions[field]]}`).join('，');
+    const openText = [target, ...sources].map((entry) => openCount(entry)).join('+');
+    commit('合并重复词条', `将 ${sources.map((source) => `“${source.headword}”`).join('、')} 并入“${target.headword}”；未解决意见 ${openText} 条；${decisionText}`, [targetId, ...sourceIds], () => {
+      // 主条已有意见补上原词条归属；已有 origin 的（来自更早一次合并）保持最初来源不变
+      target.reviewerComments.forEach((comment) => {
+        if (!comment.origin) comment.origin = { entryId: target.id, headword: target.headword, field: comment.field };
+      });
       sources.forEach((source) => {
-        const layers: Array<keyof DictionaryEntry> = ['dialectVariants', 'examples', 'sources', 'synonyms', 'reviewerComments'];
-        layers.forEach((field) => {
+        (['dialectVariants', 'examples', 'sources', 'synonyms'] as const).forEach((field) => {
           const targetValue = target[field] as unknown[];
           const sourceValue = source[field] as unknown[];
           targetValue.push(...clone(sourceValue));
         });
+        // 意见逐条带过来，并标注原词条、原字段，避免合并后“意见换了主人”
+        source.reviewerComments.forEach((comment) => {
+          const inherited = clone(comment);
+          if (!inherited.origin) inherited.origin = { entryId: source.id, headword: source.headword, field: inherited.field };
+          target.reviewerComments.push(inherited);
+        });
       });
-      (['headword', 'pronunciation', 'partOfSpeech', 'definition', 'notes'] as const).forEach((field) => {
-        const choice = selected[field] ?? 'target';
+      scalarFields.forEach((field) => {
+        const choice = fieldDecisions[field];
         if (choice === 'source') target[field] = sources[0]![field];
         if (choice === 'combine' && target[field] !== sources[0]![field]) target[field] = `${target[field]}；${sources[0]![field]}`;
       });
+      target.mergeHistory = [...(target.mergeHistory ?? []), record];
       target.status = 'disputed';
       sourceIds.forEach((id) => {
         const index = entries.findIndex((entry) => entry.id === id);
         if (index >= 0) entries.splice(index, 1);
       });
     });
+    selectedId.value = targetId;
   }
 
   function undo() {

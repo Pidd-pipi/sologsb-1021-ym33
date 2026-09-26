@@ -22,6 +22,14 @@ export interface DictionarySource {
   url: string;
 }
 
+export type MergeFieldChoice = 'target' | 'source' | 'combine';
+
+export interface CommentOrigin {
+  entryId: string;
+  headword: string;
+  field: string;
+}
+
 export interface ReviewComment {
   id: string;
   field: string;
@@ -30,6 +38,16 @@ export interface ReviewComment {
   status: 'open' | 'resolved';
   createdAt: string;
   replies: Array<{ id: string; author: string; message: string; createdAt: string }>;
+  /** 意见最初所属的词条与字段；合并词条时写入，之后不再改写 */
+  origin?: CommentOrigin;
+}
+
+export interface MergeRecord {
+  id: string;
+  at: string;
+  targetHeadword: string;
+  sources: Array<{ id: string; headword: string }>;
+  fieldDecisions: Record<string, MergeFieldChoice>;
 }
 
 export interface DictionaryEntry {
@@ -47,6 +65,8 @@ export interface DictionaryEntry {
   createdAt: string;
   updatedAt: string;
   reviewerComments: ReviewComment[];
+  /** 历次合并的字段取舍记录，随词条持久保存 */
+  mergeHistory?: MergeRecord[];
 }
 
 export interface VersionRecord {
